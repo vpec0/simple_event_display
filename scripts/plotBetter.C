@@ -4,6 +4,15 @@ void setMargin(TAxis* ax);
 void setMargin(TH1* h);
 
 void plotBetter(const char *fname)
+/** {
+ * Takes a root file as an input. This needs to be created from
+ * standard larsoft event display and needs to contain the canvas
+ * renamed to evd_canvas.
+ *
+ * evd [0] auto c = (TCanvas*)fWireProjP2->GetMother()
+ * evd [1] c->SetName("evd_canvas")
+ * evd [2] c->SaveAs("test_canvas.root")
+ **/
 {
     // gROOT->ForceStyle(1);
 
@@ -53,6 +62,7 @@ void plotBetter(const char *fname)
 
 
     auto c = new TCanvas("c", "", 400, 500);
+    c->Draw();
 
     int ipad = 0;
     for (auto pad: pads) {
@@ -63,14 +73,20 @@ void plotBetter(const char *fname)
 
 	pad->Draw();
 
+	// Make proper margins for each pad
 	pad->SetLeftMargin(pad_left_margin);
 	pad->SetRightMargin(pad_right_margin);
 	if (ipad > 0)
 	    pad->SetTopMargin(pad_margin);
-	else
+	else {
+	    pad -> SetPad(0., ipad*pad_height,
+			  pad_width, (ipad+1)*pad_height + pad_offset);
 	    pad->SetTopMargin(0.01);
+	    pad->SetBottomMargin(0.2);
+	}
 
-	auto h = (TH1*)pad->GetPrimitive("hframe");
+	// set better axis labels and titles
+	TH1* h = (TH1*)pad->GetPrimitive("hframe");
 	h->GetXaxis()->SetLabelSize(label_size);
 	h->GetYaxis()->SetLabelSize(label_size);
 
@@ -90,37 +106,77 @@ void plotBetter(const char *fname)
 
 	if (ipad == 0) {
 	    h->GetXaxis()->SetTitle("Wire Segment");
-	    pad -> SetPad(0., ipad*pad_height,
-			  pad_width, (ipad+1)*pad_height + pad_offset);
-	    pad->SetBottomMargin(0.2);
 	}
 
 	if (ipad == 1) {
 	    h->GetYaxis()->SetTitle("TDC");
 	}
 
-	// remove track numbering from the pad
+	// remove track numbering from the pad, vertex indicating circles, and black hit lines
 	for ( auto primitive: *pad->GetListOfPrimitives() ) {
 	    if ( strstr(primitive->ClassName(), "TText") )
 		pad->GetListOfPrimitives()->Remove(primitive);
 	    if ( strstr(primitive->ClassName(), "TMarker") )
 		pad->GetListOfPrimitives()->Remove(primitive);
+	    if ( strstr(primitive->ClassName(), "TPolyLine") )
+		//if (((TPolyLine*)primitive)->GetLineColor() == kBlack)
+		    pad->GetListOfPrimitives()->Remove(primitive);
+	}
+
+	c->Modified();
+	c->Update();
+	auto xaxis = h->GetXaxis();
+	auto yaxis = h->GetXaxis();
+	// remove hits drawn outside the range of the shown axes
+	double xlow = xaxis->GetBinLowEdge(xaxis->GetFirst());
+	double xhi  = xaxis->GetBinLowEdge(xaxis->GetLast()+1);
+	for ( auto prim: *pad->GetListOfPrimitives() ) {
+	    if ( strstr(prim->ClassName(), "TBox") ) {
+		double x = ((TBox*)prim)->GetX1();
+		//cout<<h->GetName()<<" "<<x<<": "<<xlow<<" "<<xhi<<endl;
+		if ( x < xlow || x > xhi )
+		    pad->GetListOfPrimitives()->Remove(prim);
+	    }
 	}
 
 
 	// set axis range to allow for margins around plotted objects
-	c->Update();
-	auto xaxis = h->GetXaxis();
-	auto yaxis = h->GetXaxis();
-
 	//setMargin(xaxis);
 	setMargin(h);
 
+
+	// change colors of the object to brighter colors
+	for ( auto prim: *pad->GetListOfPrimitives() ) {
+	    if ( strstr( prim->ClassName(),"TBox" ) ) {
+		auto color = ((TBox*)prim)->GetLineColor();
+		if (!color) continue;
+		// cout<<prim->ClassName()<<endl;
+		// cout<<color<<endl;
+		// do double bright
+		color = TColor::GetColorBright(color);
+		//color = TColor::GetColorBright(color);
+		((TBox*)prim)->SetLineColor(color);
+		// cout<<color<<endl;
+	    }
+	    if ( strstr( prim->ClassName(),"TLine" ) ) {
+		auto color = ((TLine*)prim)->GetLineColor();
+		if (!color) continue;
+		color = TColor::GetColorBright(color);
+		((TLine*)prim)->SetLineColor(color);
+	    }
+
+	    if ( !strstr( prim->ClassName(),"TLine" ) && !strstr( prim->ClassName(),"TBox" ) ) {
+		cout<<prim->ClassName()<<" "<<prim->GetName()<<endl;
+	    }
+	}
+
+	cout<<xlow<<" "<<xhi<<endl;
 
 	cout<<"X: "<<pad->GetAbsXlowNDC()
 	    <<", "<<pad->GetAbsWNDC()<<endl;
 	cout<<"Y: "<<pad->GetAbsYlowNDC()
 	    <<", "<<pad->GetAbsHNDC()<<endl;
+
 
 	ipad++;
     }
@@ -136,8 +192,8 @@ void plotBetter(const char *fname)
 
 void setMargin(TAxis* ax) {
     // tries to add margin to the axis' range
-    double low = ax -> GetXmin();
-    double hi = ax -> GetXmax();
+    double low = ax->GetBinLowEdge(ax->GetFirst());
+    double hi  = ax->GetBinLowEdge(ax->GetLast()+1);
 
     cout<<"Axis range: "<<low<<" "<<hi<<endl;
 
