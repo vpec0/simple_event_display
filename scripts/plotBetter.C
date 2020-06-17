@@ -121,6 +121,16 @@ void plotBetter(const char *fname)
 	    if ( strstr(primitive->ClassName(), "TPolyLine") )
 		//if (((TPolyLine*)primitive)->GetLineColor() == kBlack)
 		    pad->GetListOfPrimitives()->Remove(primitive);
+
+	    // remove hits
+	    // if ( strstr(primitive->ClassName(), "TBox") )
+	    // 	if ( ((TBox*)primitive)->GetFillStyle() == 0 )
+	    // 	    pad->GetListOfPrimitives()->Remove(primitive);
+
+	    // remove calorimetry
+	    if ( strstr(primitive->ClassName(), "TBox") )
+		if ( ((TBox*)primitive)->GetFillStyle() != 0 )
+		    pad->GetListOfPrimitives()->Remove(primitive);
 	}
 
 	c->Modified();
